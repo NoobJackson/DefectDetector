@@ -20,8 +20,8 @@ from pydantic_settings import BaseSettings
 class Settings(BaseSettings):
     camera_width: int = 1280
     camera_height: int = 720
-    min_capture_interval: float = 0.05  # 最小捕获间隔(20fps)
-    yolo_model_path: str = "yolo11n.pt"
+    min_capture_interval: float = 0.01  # 最小捕获间隔
+    yolo_model_path: str = "./checkpoints/yolo11n.pt"
     yolo_confidence: float = 0.4
     jpeg_quality: int = 70
     server_host: str = "0.0.0.0"
@@ -148,7 +148,7 @@ class ImageProcessor:
     async def process(self, frame):
         """异步处理帧：目标检测并绘制边界框"""
         if frame is None:
-            return None
+            return (None, 0)
             
         loop = asyncio.get_event_loop()
         return await loop.run_in_executor(None, self._sync_process, frame)
@@ -167,13 +167,14 @@ class ImageProcessor:
             )
             
             # 绘制检测结果
+            detection_count = len(results[0].boxes)
             annotated_frame = results[0].plot()
             self.processing_time = (time.time() - start_time) * 1000  # 转换为毫秒
-            return annotated_frame
+            return (annotated_frame, detection_count)
             
         except Exception as e:
             logger.error(f"图像处理错误: {str(e)}")
-            return frame  # 出错时返回原始帧
+            return (frame, 0)  # 出错时返回原始帧
 
     def set_confidence(self, value):
         """动态调整置信度阈值"""
@@ -314,7 +315,7 @@ async def frame_producer(websocket: WebSocket, session_id: str):
             consecutive_errors = 0  # 重置错误计数器
             
             # 处理帧
-            processed_frame = await image_processor.process(frame)
+            processed_frame, detection_count  = await image_processor.process(frame)
             if processed_frame is None:
                 await asyncio.sleep(frame_interval)
                 continue
@@ -323,6 +324,17 @@ async def frame_producer(websocket: WebSocket, session_id: str):
             send_success = await connection_manager.send_frame(websocket, processed_frame)
             if not send_success:
                 consecutive_errors += 1
+
+            # 发送目标数量（新增代码）
+            if websocket.client_state == WebSocketState.CONNECTED:
+                try:
+                    await websocket.send_text(json.dumps({
+                        "type": "detection_count", 
+                        "count": detection_count, 
+                        "timestamp": time.time() 
+                    }))
+                except Exception as e:
+                    logger.warning(f"发送目标数量失败: {str(e)}")
             
             # 动态调整间隔，匹配处理能力
             adjusted_interval = max(frame_interval, image_processor.processing_time / 1000)
