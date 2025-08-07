@@ -4,9 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>YOLO实时目标检测系统</title>
-    <!-- 引入Tailwind CSS -->
+    <!-- 引入外部资源 -->
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- 引入Font Awesome -->
     <link href="https://cdn.jsdelivr.net/npm/font-awesome@4.7.0/css/font-awesome.min.css" rel="stylesheet">
     
     <!-- Tailwind配置 -->
@@ -15,16 +14,14 @@
             theme: {
                 extend: {
                     colors: {
-                        primary: '#165DFF',
-                        secondary: '#36CFC9',
-                        success: '#52C41A',
-                        warning: '#FAAD14',
-                        danger: '#FF4D4F',
-                        dark: '#1D2129',
-                        light: '#F2F3F5'
+                        primary: '#3B82F6',
+                        secondary: '#10B981',
+                        accent: '#8B5CF6',
+                        dark: '#1E293B',
+                        light: '#F8FAFC'
                     },
                     fontFamily: {
-                        inter: ['Inter', 'system-ui', 'sans-serif'],
+                        sans: ['Inter', 'system-ui', 'sans-serif'],
                     },
                 }
             }
@@ -37,133 +34,72 @@
             .content-auto {
                 content-visibility: auto;
             }
-            .backdrop-blur {
-                backdrop-filter: blur(8px);
+            .glass {
+                background: rgba(255, 255, 255, 0.15);
+                backdrop-filter: blur(10px);
+                border: 1px solid rgba(255, 255, 255, 0.2);
             }
-            .text-shadow {
-                text-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            .card-hover {
+                transition: all 0.3s ease;
             }
-            .transition-all-300 {
-                transition: all 300ms ease-in-out;
+            .card-hover:hover {
+                transform: translateY(-5px);
+                box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
             }
         }
     </style>
     
     <style>
-        body {
-            font-family: 'Inter', system-ui, sans-serif;
-            background-color: #f8fafc;
-        }
+        /* 基础动画定义 */
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+        @keyframes slideUp { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+        @keyframes spin { to { transform: rotate(360deg); } }
         
-        .video-container {
-            position: relative;
-            overflow: hidden;
-            border-radius: 0.75rem;
-            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
-        }
-        
-        .video-overlay {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background-color: rgba(0, 0, 0, 0.5);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            z-index: 10;
-        }
-        
-        .pulse {
-            animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
-        }
-        
-        @keyframes pulse {
-            0%, 100% {
-                opacity: 1;
-            }
-            50% {
-                opacity: 0.5;
-            }
-        }
-        
-        .slide-in {
-            animation: slideIn 0.5s ease-out forwards;
-        }
-        
-        @keyframes slideIn {
-            from {
-                transform: translateY(20px);
-                opacity: 0;
-            }
-            to {
-                transform: translateY(0);
-                opacity: 1;
-            }
-        }
-        
-        .fade-in {
-            animation: fadeIn 0.5s ease-out forwards;
-        }
-        
-        @keyframes fadeIn {
-            from {
-                opacity: 0;
-            }
-            to {
-                opacity: 1;
-            }
-        }
-        
-        .loading-spinner {
-            width: 50px;
-            height: 50px;
-            border: 5px solid rgba(255, 255, 255, 0.3);
+        /* 加载动画 */
+        .loader {
+            width: 48px;
+            height: 48px;
+            border: 5px solid rgba(255, 255, 255, 0.2);
+            border-bottom-color: #fff;
             border-radius: 50%;
-            border-top-color: white;
-            animation: spin 1s ease-in-out infinite;
+            animation: spin 1s linear infinite;
         }
         
-        @keyframes spin {
-            to { transform: rotate(360deg); }
-        }
+        /* 元素动画类 */
+        .animate-fade-in { animation: fadeIn 0.5s ease-out forwards; }
+        .animate-slide-up { animation: slideUp 0.5s ease-out forwards; }
+        .animate-pulse-slow { animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite; }
         
-        .control-panel {
-            backdrop-filter: blur(10px);
-            transition: all 0.3s ease;
-        }
-        
-        .control-panel:hover {
-            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1);
-        }
-        
-        /* 新增：滑块调整时的视觉反馈 */
-        #confidence-slider:focus {
-            outline: 2px solid rgba(22, 93, 255, 0.3);
-            outline-offset: 2px;
-        }
-        
-        .confidence-updating {
-            animation: pulse 1.5s infinite;
-        }
+        /* 滚动条美化 */
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: rgba(0, 0, 0, 0.05); border-radius: 3px; }
+        ::-webkit-scrollbar-thumb { background: rgba(0, 0, 0, 0.2); border-radius: 3px; }
+        ::-webkit-scrollbar-thumb:hover { background: rgba(0, 0, 0, 0.3); }
     </style>
 </head>
-<body class="min-h-screen flex flex-col">
+<body class="bg-slate-50 font-sans text-slate-800 min-h-screen flex flex-col">
     <!-- 导航栏 -->
-    <header class="bg-white shadow-md z-50 transition-all duration-300">
+    <header class="bg-white shadow-sm sticky top-0 z-50 transition-all duration-300">
         <div class="container mx-auto px-4 py-3 flex justify-between items-center">
-            <div class="flex items-center space-x-2">
-                <i class="fa fa-eye text-primary text-2xl"></i>
-                <h1 class="text-xl font-bold text-dark">YOLO实时目标检测系统</h1>
-            </div>
-            <div class="flex items-center space-x-4">
-                <div id="status-indicator" class="flex items-center text-sm">
-                    <span id="connection-status" class="inline-block w-2 h-2 rounded-full bg-warning mr-2"></span>
-                    <span id="status-text">连接中...</span>
+            <div class="flex items-center space-x-3">
+                <div class="w-10 h-10 rounded-lg bg-gradient-to-br from-primary to-accent flex items-center justify-center">
+                    <i class="fa fa-eye text-white text-xl"></i>
                 </div>
-                <button id="fullscreen-btn" class="p-2 rounded-full hover:bg-gray-100 transition-all">
-                    <i class="fa fa-expand text-dark"></i>
+                <h1 class="text-xl font-bold bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">
+                    YOLO实时目标检测系统
+                </h1>
+            </div>
+            
+            <div class="flex items-center space-x-6">
+                <div class="hidden md:flex items-center space-x-2">
+                    <span id="connection-status-dot" class="w-3 h-3 rounded-full bg-amber-400 animate-pulse-slow"></span>
+                    <span id="connection-status-text" class="text-sm font-medium">连接中...</span>
+                </div>
+                
+                <button id="fullscreen-btn" class="p-2 rounded-full hover:bg-slate-100 transition-all relative overflow-hidden group">
+                    <i class="fa fa-expand text-slate-600 group-hover:text-primary transition-colors"></i>
+                    <span class="absolute inset-0 bg-primary/10 scale-0 group-hover:scale-100 rounded-full transition-transform origin-center duration-300"></span>
                 </button>
             </div>
         </div>
@@ -173,70 +109,121 @@
     <main class="flex-grow container mx-auto px-4 py-6">
         <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
             <!-- 视频区域 -->
-            <div class="lg:col-span-2 slide-in" style="animation-delay: 100ms;">
-                <div class="video-container w-full bg-dark">
-                    <!-- 视频流将通过JS渲染到这个canvas -->
+            <div class="lg:col-span-2 animate-slide-up" style="animation-delay: 100ms;">
+                <div class="relative rounded-xl overflow-hidden shadow-lg bg-dark">
+                    <!-- 视频Canvas -->
                     <canvas id="video-canvas" class="w-full h-auto"></canvas>
                     
-                    <!-- 加载状态覆盖层 -->
-                    <div id="loading-overlay" class="video-overlay">
-                        <div class="text-center">
-                            <div class="loading-spinner mx-auto mb-4"></div>
-                            <p class="text-white text-lg">正在连接视频流...</p>
-                        </div>
+                    <!-- 加载覆盖层 -->
+                    <div id="loading-overlay" class="absolute inset-0 bg-dark/80 flex flex-col items-center justify-center z-10">
+                        <div class="loader mb-4"></div>
+                        <p class="text-white text-lg font-medium">正在连接视频流...</p>
                     </div>
                     
-                    <!-- 错误状态覆盖层 (默认隐藏) -->
-                    <div id="error-overlay" class="video-overlay hidden">
-                        <div class="text-center text-white p-4">
-                            <i class="fa fa-exclamation-triangle text-4xl mb-4 text-warning"></i>
-                            <p id="error-message" class="text-lg">连接失败，请重试</p>
-                            <button id="reconnect-btn" class="mt-4 bg-primary hover:bg-primary/90 text-white px-4 py-2 rounded-lg transition-all">
+                    <!-- 错误覆盖层 -->
+                    <div id="error-overlay" class="absolute inset-0 bg-dark/80 flex flex-col items-center justify-center z-10 hidden">
+                        <div class="text-center p-6 max-w-md">
+                            <div class="w-16 h-16 rounded-full bg-red-500/20 flex items-center justify-center mx-auto mb-4">
+                                <i class="fa fa-exclamation-triangle text-red-400 text-2xl"></i>
+                            </div>
+                            <h3 class="text-white text-xl font-semibold mb-2">连接失败</h3>
+                            <p id="error-message" class="text-slate-300 mb-6">无法建立视频流连接，请检查网络或重试</p>
+                            <button id="reconnect-btn" class="bg-primary hover:bg-primary/90 text-white px-6 py-2.5 rounded-lg transition-all font-medium">
                                 重新连接
                             </button>
                         </div>
                     </div>
                 </div>
                 
-                <!-- 视频信息栏 -->
-                <div class="mt-4 bg-white p-3 rounded-lg shadow flex flex-wrap justify-between items-center">
-                    <div class="flex items-center space-x-4 mb-2 sm:mb-0">
-                        <div class="flex items-center">
-                            <i class="fa fa-tachometer text-primary mr-2"></i>
-                            <span>帧率: <span id="fps-counter">0</span> FPS</span>
+                <!-- 视频信息层（固定宽度，防止排版跳动） -->
+                <div class="mt-4 glass rounded-lg p-3 text-slate-800 text-sm flex flex-wrap gap-6">
+                    <div class="flex items-center gap-2 w-36">
+                        <i class="fa fa-tachometer text-primary w-5"></i>
+                        <span>帧率: <span id="fps-counter" class="font-medium inline-block w-10 text-right">0</span> FPS</span>
+                    </div>
+                    <div class="flex items-center gap-2 w-36">
+                        <i class="fa fa-clock-o text-primary w-5"></i>
+                        <span>延迟: <span id="latency-counter" class="font-medium inline-block w-10 text-right">0</span> ms</span>
+                    </div>
+                    <div class="flex items-center gap-2 w-44">
+                        <i class="fa fa-picture-o text-primary w-5"></i>
+                        <span>分辨率: <span id="resolution-info" class="font-medium inline-block w-20 text-right">加载中...</span></span>
+                    </div>
+                </div>
+                
+                <!-- 检测统计卡片 -->
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mt-6">
+                    <div class="bg-white rounded-xl shadow-sm p-4 card-hover">
+                        <div class="flex items-start justify-between">
+                            <div>
+                                <p class="text-slate-500 text-sm">当前检测目标</p>
+                                <h3 id="detection-count" class="text-3xl font-bold mt-1 text-primary">0</h3>
+                            </div>
+                            <div class="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
+                                <i class="fa fa-object-group text-primary"></i>
+                            </div>
                         </div>
-                        <div class="flex items-center">
-                            <i class="fa fa-clock-o text-primary mr-2"></i>
-                            <span>延迟: <span id="latency-counter">0</span> ms</span>
-                        </div>
-                        <div class="flex items-center">
-                            <i class="fa fa-picture-o text-primary mr-2"></i>
-                            <span>分辨率: <span id="resolution-info">加载中...</span></span>
+                        <div class="mt-3 pt-3 border-t border-slate-100">
+                            <div class="flex justify-between items-center text-sm">
+                                <span class="text-slate-500">处理耗时</span>
+                                <span id="processing-time" class="font-medium">0 ms</span>
+                            </div>
                         </div>
                     </div>
-                    <div class="flex items-center">
-                        <span id="detection-count" class="bg-light px-3 py-1 rounded-full text-sm">
-                            检测到: 0 个目标
-                        </span>
+                    
+                    <div class="bg-white rounded-xl shadow-sm p-4 card-hover">
+                        <div class="flex items-start justify-between">
+                            <div>
+                                <p class="text-slate-500 text-sm">模型信息</p>
+                                <h3 id="model-name" class="text-2xl font-bold mt-1 text-accent">YOLO11n</h3>
+                            </div>
+                            <div class="w-10 h-10 rounded-full bg-accent/10 flex items-center justify-center">
+                                <i class="fa fa-cogs text-accent"></i>
+                            </div>
+                        </div>
+                        <div class="mt-3 pt-3 border-t border-slate-100">
+                            <div class="flex justify-between items-center text-sm">
+                                <span class="text-slate-500">置信度阈值</span>
+                                <span id="confidence-value-display" class="font-medium">0.4</span>
+                            </div>
+                        </div>
                     </div>
+                    <div class="bg-white rounded-xl shadow-sm p-4 card-hover">
+                        <div class="flex items-start justify-between">
+                            <div>
+                                <p class="text-slate-500 text-sm">连接时长</p>
+                                <h3 id="connection-time" class="text-3xl font-bold mt-1 text-secondary">0s</h3>
+                            </div>
+                            <div class="w-10 h-10 rounded-full bg-secondary/10 flex items-center justify-center">
+                                <i class="fa fa-clock-o text-secondary"></i>
+                            </div>
+                        </div>
+                        <div class="mt-3 pt-3 border-t border-slate-100">
+                            <div class="flex justify-between items-center text-sm">
+                                <span class="text-slate-500">会话ID</span>
+                                <span id="session-id-short" class="font-mono font-medium text-xs truncate max-w-[100px]"></span>
+                            </div>
+                        </div>
+                    </div>
+                    
                 </div>
             </div>
             
             <!-- 控制面板 -->
-            <div class="lg:col-span-1 slide-in" style="animation-delay: 200ms;">
-                <div class="bg-white rounded-lg shadow-lg overflow-hidden h-full">
-                    <div class="bg-primary text-white p-4">
-                        <h2 class="text-lg font-semibold flex items-center">
+            <div class="lg:col-span-1 animate-slide-up" style="animation-delay: 200ms;">
+                <div class="bg-white rounded-xl shadow-sm overflow-hidden h-full">
+                    <div class="bg-gradient-to-r from-primary to-accent p-5">
+                        <h2 class="text-xl font-bold text-white flex items-center">
                             <i class="fa fa-sliders mr-2"></i>控制面板
                         </h2>
                     </div>
                     
                     <div class="p-5 space-y-6">
                         <!-- 置信度设置 -->
-                        <div class="space-y-3">
+                        <div class="space-y-4">
                             <div class="flex justify-between items-center">
-                                <label for="confidence-slider" class="font-medium text-dark">检测置信度</label>
-                                <span id="confidence-value" class="bg-primary/10 text-primary px-2 py-1 rounded text-sm">0.4</span>
+                                <label for="confidence-slider" class="font-medium">检测置信度</label>
+                                <span id="confidence-value" class="bg-primary/10 text-primary px-3 py-1 rounded-full text-sm font-medium">0.4</span>
                             </div>
                             <input 
                                 type="range" 
@@ -245,47 +232,42 @@
                                 max="0.9" 
                                 step="0.05" 
                                 value="0.4"
-                                class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-primary"
+                                class="w-full h-2 bg-slate-200 rounded-full appearance-none cursor-pointer accent-primary"
                             >
-                            <p class="text-xs text-gray-500">调整目标检测的敏感度，值越高检测越严格</p>
                         </div>
                         
-                        <hr class="border-gray-200">
+                        <hr class="border-slate-100">
                         
-                        <!-- 系统状态 -->
+                        <!-- 系统信息 -->
                         <div>
-                            <h3 class="font-medium text-dark mb-3 flex items-center">
-                                <i class="fa fa-info-circle mr-2 text-primary"></i>系统状态
+                            <h3 class="font-medium mb-3 flex items-center">
+                                <i class="fa fa-info-circle mr-2 text-primary"></i>系统信息
                             </h3>
-                            <div class="space-y-2 text-sm">
-                                <div class="flex justify-between">
-                                    <span class="text-gray-600">会话ID:</span>
-                                    <span id="session-id" class="font-mono bg-light px-2 py-1 rounded truncate max-w-[180px]"></span>
+                            <div class="space-y-3 text-sm">
+                                <div class="flex justify-between p-2 hover:bg-slate-50 rounded-lg transition-colors">
+                                    <span class="text-slate-500">会话ID:</span>
+                                    <span id="session-id" class="font-mono bg-slate-100 px-2 py-0.5 rounded truncate max-w-[160px]"></span>
                                 </div>
-                                <div class="flex justify-between">
-                                    <span class="text-gray-600">连接时间:</span>
-                                    <span id="connection-time">-</span>
+                                <div class="flex justify-between p-2 hover:bg-slate-50 rounded-lg transition-colors">
+                                    <span class="text-slate-500">WebSocket状态:</span>
+                                    <span id="ws-status" class="text-amber-500">连接中</span>
                                 </div>
-                                <div class="flex justify-between">
-                                    <span class="text-gray-600">模型名称:</span>
-                                    <span id="model-name">YOLO11n</span>
-                                </div>
-                                <div class="flex justify-between">
-                                    <span class="text-gray-600">处理耗时:</span>
-                                    <span id="processing-time">0 ms</span>
+                                <div class="flex justify-between p-2 hover:bg-slate-50 rounded-lg transition-colors">
+                                    <span class="text-slate-500">最后活动时间:</span>
+                                    <span id="last-activity" class="text-slate-600">-</span>
                                 </div>
                             </div>
                         </div>
                         
-                        <hr class="border-gray-200">
+                        <hr class="border-slate-100">
                         
-                        <!-- 日志区域 -->
+                        <!-- 事件日志 -->
                         <div>
-                            <h3 class="font-medium text-dark mb-3 flex items-center">
+                            <h3 class="font-medium mb-3 flex items-center">
                                 <i class="fa fa-history mr-2 text-primary"></i>事件日志
                             </h3>
-                            <div id="event-log" class="bg-light rounded-lg p-3 h-40 overflow-y-auto text-sm space-y-1 text-gray-700 text-xs">
-                                <div class="fade-in">系统初始化中...</div>
+                            <div id="event-log" class="bg-slate-50 rounded-lg p-3 h-40 overflow-y-auto text-sm space-y-2 text-slate-700">
+                                <div class="animate-fade-in"><i class="fa fa-circle text-xs text-primary mr-2"></i>系统初始化中...</div>
                             </div>
                         </div>
                     </div>
@@ -295,9 +277,18 @@
     </main>
 
     <!-- 页脚 -->
-    <footer class="bg-dark text-white py-4 mt-6">
-        <div class="container mx-auto px-4 text-center text-sm">
-            <p>© 2023 YOLO实时目标检测系统 | 使用FastAPI和WebSocket构建</p>
+    <footer class="bg-dark text-slate-400 py-6 mt-8">
+        <div class="container mx-auto px-4">
+            <div class="flex flex-col md:flex-row justify-between items-center">
+                <div class="mb-4 md:mb-0">
+                    <p class="text-sm">© 2023 YOLO实时目标检测系统</p>
+                </div>
+                <div class="flex space-x-6 text-sm">
+                    <a href="#" class="hover:text-white transition-colors">关于系统</a>
+                    <a href="#" class="hover:text-white transition-colors">使用帮助</a>
+                    <a href="#" class="hover:text-white transition-colors">技术文档</a>
+                </div>
+            </div>
         </div>
     </footer>
 
@@ -313,8 +304,8 @@
         let connectionStartTime = null;
         let detectionCount = 0;
         let processingTime = 0;
-        // 新增：防抖计时器
         let confidenceDebounceTimer = null;
+        let detectionHistory = [];
         
         // DOM元素
         const elements = {
@@ -325,16 +316,21 @@
             reconnectBtn: document.getElementById('reconnect-btn'),
             confidenceSlider: document.getElementById('confidence-slider'),
             confidenceValue: document.getElementById('confidence-value'),
+            confidenceValueDisplay: document.getElementById('confidence-value-display'),
             fpsCounter: document.getElementById('fps-counter'),
             latencyCounter: document.getElementById('latency-counter'),
             resolutionInfo: document.getElementById('resolution-info'),
             detectionCount: document.getElementById('detection-count'),
             sessionId: document.getElementById('session-id'),
+            sessionIdShort: document.getElementById('session-id-short'),
             connectionTime: document.getElementById('connection-time'),
             processingTime: document.getElementById('processing-time'),
+            modelName: document.getElementById('model-name'),
             eventLog: document.getElementById('event-log'),
-            connectionStatus: document.getElementById('connection-status'),
-            statusText: document.getElementById('status-text'),
+            connectionStatusDot: document.getElementById('connection-status-dot'),
+            connectionStatusText: document.getElementById('connection-status-text'),
+            wsStatus: document.getElementById('ws-status'),
+            lastActivity: document.getElementById('last-activity'),
             fullscreenBtn: document.getElementById('fullscreen-btn')
         };
         
@@ -342,6 +338,7 @@
         function init() {
             // 设置会话ID显示
             elements.sessionId.textContent = sessionId;
+            elements.sessionIdShort.textContent = sessionId.substring(0, 8) + '...';
             
             // 初始化Canvas
             canvas = elements.canvas;
@@ -350,7 +347,7 @@
             // 连接WebSocket
             connectWebSocket();
             
-            // 事件监听 - 修改：使用change事件并添加input事件用于实时显示
+            // 事件监听
             elements.confidenceSlider.addEventListener('input', handleConfidenceDisplay);
             elements.confidenceSlider.addEventListener('change', handleConfidenceChange);
             elements.reconnectBtn.addEventListener('click', reconnect);
@@ -358,27 +355,31 @@
             
             // 启动FPS计数器
             setInterval(updateFPS, 1000);
+            
+            // 启动连接时间更新
+            requestAnimationFrame(updateConnectionTime);
         }
         
-        // 处理置信度显示更新（仅更新UI，不发送请求）
+        // 处理置信度显示更新
         function handleConfidenceDisplay() {
             const value = parseFloat(elements.confidenceSlider.value);
             elements.confidenceValue.textContent = value.toFixed(2);
+            elements.confidenceValueDisplay.textContent = value.toFixed(2);
         }
         
-        // 处理置信度实际变更（发送请求到服务器）
+        // 处理置信度实际变更
         function handleConfidenceChange() {
             const value = parseFloat(elements.confidenceSlider.value);
             
-            // 添加视觉反馈，显示正在更新
-            elements.confidenceValue.classList.add('confidence-updating');
+            // 添加视觉反馈
+            elements.confidenceValue.classList.add('animate-pulse-slow');
             
             // 清除之前的计时器
             if (confidenceDebounceTimer) {
                 clearTimeout(confidenceDebounceTimer);
             }
             
-            // 设置防抖计时器，500ms内没有新的变化才发送请求
+            // 设置防抖计时器
             confidenceDebounceTimer = setTimeout(() => {
                 // 发送到服务器
                 if (ws && ws.readyState === WebSocket.OPEN) {
@@ -386,17 +387,17 @@
                         type: 'set_confidence',
                         value: value
                     }));
-                    logEvent(`设置置信度为 ${value.toFixed(2)}`);
+                    logEvent(`设置检测置信度为 ${value.toFixed(2)}`);
                 }
                 
-                // 移除更新状态的视觉反馈
-                elements.confidenceValue.classList.remove('confidence-updating');
+                // 移除更新状态
+                elements.confidenceValue.classList.remove('animate-pulse-slow');
             }, 500);
         }
         
         // 连接WebSocket
         function connectWebSocket() {
-            // 隐藏错误覆盖层，显示加载覆盖层
+            // 显示加载，隐藏错误
             elements.errorOverlay.classList.add('hidden');
             elements.loadingOverlay.classList.remove('hidden');
             
@@ -412,15 +413,17 @@
             
             // 连接打开时
             ws.onopen = function() {
-                logEvent('已连接到服务器');
+                logEvent('已成功连接到视频流服务器');
                 elements.loadingOverlay.classList.add('hidden');
                 updateStatus('connected', '已连接');
                 connectionStartTime = new Date();
-                updateConnectionTime();
+                updateLastActivity();
             };
             
             // 收到消息时
             ws.onmessage = function(event) {
+                updateLastActivity();
+                
                 // 处理二进制帧数据(视频帧)
                 if (event.data instanceof Blob) {
                     handleFrameData(event.data);
@@ -450,10 +453,10 @@
             
             // 连接错误时
             ws.onerror = function(error) {
-                logEvent(`WebSocket错误: ${error}`, 'error');
+                logEvent(`WebSocket错误: 无法建立连接`, 'error');
                 elements.loadingOverlay.classList.add('hidden');
                 elements.errorOverlay.classList.remove('hidden');
-                elements.errorMessage.textContent = '连接发生错误，请重试';
+                elements.errorMessage.textContent = '连接发生错误，请检查网络或重试';
                 updateStatus('error', '错误');
             };
         }
@@ -506,6 +509,22 @@
                 case 'confidence_updated':
                     logEvent(message.message);
                     break;
+                case 'detection_count':
+                    // 更新检测计数
+                    detectionCount = message.count;
+                    elements.detectionCount.textContent = detectionCount;
+                    
+                    // 记录历史数据
+                    detectionHistory.push({
+                        timestamp: message.timestamp,
+                        count: detectionCount
+                    });
+                    
+                    // 只保留最近30条数据
+                    if (detectionHistory.length > 30) {
+                        detectionHistory.shift();
+                    }
+                    break;
                 case 'ack':
                     // 确认消息，无需特别处理
                     break;
@@ -538,7 +557,10 @@
         
         // 更新连接时间
         function updateConnectionTime() {
-            if (!connectionStartTime) return;
+            if (!connectionStartTime) {
+                requestAnimationFrame(updateConnectionTime);
+                return;
+            }
             
             const now = new Date();
             const diffMs = now - connectionStartTime;
@@ -557,24 +579,30 @@
             requestAnimationFrame(updateConnectionTime);
         }
         
+        // 更新最后活动时间
+        function updateLastActivity() {
+            const now = new Date();
+            elements.lastActivity.textContent = now.toLocaleTimeString();
+        }
+        
         // 记录事件日志
         function logEvent(message, type = 'info') {
             const now = new Date();
             const timeStr = now.toLocaleTimeString();
             
             const logEntry = document.createElement('div');
-            logEntry.className = 'fade-in';
+            logEntry.className = 'animate-fade-in';
             
             let icon = '';
             switch (type) {
                 case 'warning':
-                    icon = '<i class="fa fa-exclamation-circle text-warning mr-1"></i>';
+                    icon = '<i class="fa fa-exclamation-circle text-amber-500 mr-2"></i>';
                     break;
                 case 'error':
-                    icon = '<i class="fa fa-times-circle text-danger mr-1"></i>';
+                    icon = '<i class="fa fa-times-circle text-red-500 mr-2"></i>';
                     break;
                 default:
-                    icon = '<i class="fa fa-info-circle text-primary mr-1"></i>';
+                    icon = '<i class="fa fa-info-circle text-primary mr-2"></i>';
             }
             
             logEntry.innerHTML = `[${timeStr}] ${icon}${message}`;
@@ -591,45 +619,45 @@
         // 更新连接状态
         function updateStatus(status, text) {
             // 移除所有状态类
-            elements.connectionStatus.classList.remove('bg-warning', 'bg-success', 'bg-danger');
+            elements.connectionStatusDot.classList.remove('bg-amber-400', 'bg-green-500', 'bg-red-500');
+            elements.connectionStatusDot.classList.remove('animate-pulse-slow');
+            
+            // 更新WebSocket状态文本
+            elements.wsStatus.textContent = text;
+            elements.wsStatus.className = '';
             
             // 添加新状态类
             switch (status) {
                 case 'connecting':
-                    elements.connectionStatus.classList.add('bg-warning');
+                    elements.connectionStatusDot.classList.add('bg-amber-400', 'animate-pulse-slow');
+                    elements.wsStatus.classList.add('text-amber-500');
                     break;
                 case 'connected':
-                    elements.connectionStatus.classList.add('bg-success');
+                    elements.connectionStatusDot.classList.add('bg-green-500');
+                    elements.wsStatus.classList.add('text-green-500');
                     break;
                 case 'error':
-                    elements.connectionStatus.classList.add('bg-danger');
+                    elements.connectionStatusDot.classList.add('bg-red-500', 'animate-pulse-slow');
+                    elements.wsStatus.classList.add('text-red-500');
                     break;
             }
             
-            elements.statusText.textContent = text;
+            elements.connectionStatusText.textContent = text;
         }
         
         // 切换全屏
         function toggleFullscreen() {
             if (!document.fullscreenElement) {
-                if (canvas.requestFullscreen) {
-                    canvas.requestFullscreen();
-                } else if (canvas.webkitRequestFullscreen) { /* Safari */
-                    canvas.webkitRequestFullscreen();
-                } else if (canvas.msRequestFullscreen) { /* IE11 */
-                    canvas.msRequestFullscreen();
-                }
-                elements.fullscreenBtn.innerHTML = '<i class="fa fa-compress text-dark"></i>';
+                if (canvas.requestFullscreen) canvas.requestFullscreen();
+                else if (canvas.webkitRequestFullscreen) canvas.webkitRequestFullscreen();
+                else if (canvas.msRequestFullscreen) canvas.msRequestFullscreen();
+                elements.fullscreenBtn.innerHTML = '<i class="fa fa-compress text-slate-600 group-hover:text-primary transition-colors"></i><span class="absolute inset-0 bg-primary/10 scale-0 group-hover:scale-100 rounded-full transition-transform origin-center duration-300"></span>';
                 logEvent('已进入全屏模式');
             } else {
-                if (document.exitFullscreen) {
-                    document.exitFullscreen();
-                } else if (document.webkitExitFullscreen) { /* Safari */
-                    document.webkitExitFullscreen();
-                } else if (document.msExitFullscreen) { /* IE11 */
-                    document.msExitFullscreen();
-                }
-                elements.fullscreenBtn.innerHTML = '<i class="fa fa-expand text-dark"></i>';
+                if (document.exitFullscreen) document.exitFullscreen();
+                else if (document.webkitExitFullscreen) document.webkitExitFullscreen();
+                else if (document.msExitFullscreen) document.msExitFullscreen();
+                elements.fullscreenBtn.innerHTML = '<i class="fa fa-expand text-slate-600 group-hover:text-primary transition-colors"></i><span class="absolute inset-0 bg-primary/10 scale-0 group-hover:scale-100 rounded-full transition-transform origin-center duration-300"></span>';
                 logEvent('已退出全屏模式');
             }
         }
@@ -639,9 +667,7 @@
         
         // 窗口关闭时关闭连接
         window.addEventListener('beforeunload', function() {
-            if (ws) {
-                ws.close(1000, '页面关闭');
-            }
+            if (ws) ws.close(1000, '页面关闭');
         });
     </script>
 </body>
