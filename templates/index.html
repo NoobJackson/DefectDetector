@@ -1,0 +1,648 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>YOLO实时目标检测系统</title>
+    <!-- 引入Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- 引入Font Awesome -->
+    <link href="https://cdn.jsdelivr.net/npm/font-awesome@4.7.0/css/font-awesome.min.css" rel="stylesheet">
+    
+    <!-- Tailwind配置 -->
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#165DFF',
+                        secondary: '#36CFC9',
+                        success: '#52C41A',
+                        warning: '#FAAD14',
+                        danger: '#FF4D4F',
+                        dark: '#1D2129',
+                        light: '#F2F3F5'
+                    },
+                    fontFamily: {
+                        inter: ['Inter', 'system-ui', 'sans-serif'],
+                    },
+                }
+            }
+        }
+    </script>
+    
+    <!-- 自定义工具类 -->
+    <style type="text/tailwindcss">
+        @layer utilities {
+            .content-auto {
+                content-visibility: auto;
+            }
+            .backdrop-blur {
+                backdrop-filter: blur(8px);
+            }
+            .text-shadow {
+                text-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            }
+            .transition-all-300 {
+                transition: all 300ms ease-in-out;
+            }
+        }
+    </style>
+    
+    <style>
+        body {
+            font-family: 'Inter', system-ui, sans-serif;
+            background-color: #f8fafc;
+        }
+        
+        .video-container {
+            position: relative;
+            overflow: hidden;
+            border-radius: 0.75rem;
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
+        }
+        
+        .video-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 10;
+        }
+        
+        .pulse {
+            animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+        }
+        
+        @keyframes pulse {
+            0%, 100% {
+                opacity: 1;
+            }
+            50% {
+                opacity: 0.5;
+            }
+        }
+        
+        .slide-in {
+            animation: slideIn 0.5s ease-out forwards;
+        }
+        
+        @keyframes slideIn {
+            from {
+                transform: translateY(20px);
+                opacity: 0;
+            }
+            to {
+                transform: translateY(0);
+                opacity: 1;
+            }
+        }
+        
+        .fade-in {
+            animation: fadeIn 0.5s ease-out forwards;
+        }
+        
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+            }
+            to {
+                opacity: 1;
+            }
+        }
+        
+        .loading-spinner {
+            width: 50px;
+            height: 50px;
+            border: 5px solid rgba(255, 255, 255, 0.3);
+            border-radius: 50%;
+            border-top-color: white;
+            animation: spin 1s ease-in-out infinite;
+        }
+        
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        
+        .control-panel {
+            backdrop-filter: blur(10px);
+            transition: all 0.3s ease;
+        }
+        
+        .control-panel:hover {
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1);
+        }
+        
+        /* 新增：滑块调整时的视觉反馈 */
+        #confidence-slider:focus {
+            outline: 2px solid rgba(22, 93, 255, 0.3);
+            outline-offset: 2px;
+        }
+        
+        .confidence-updating {
+            animation: pulse 1.5s infinite;
+        }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col">
+    <!-- 导航栏 -->
+    <header class="bg-white shadow-md z-50 transition-all duration-300">
+        <div class="container mx-auto px-4 py-3 flex justify-between items-center">
+            <div class="flex items-center space-x-2">
+                <i class="fa fa-eye text-primary text-2xl"></i>
+                <h1 class="text-xl font-bold text-dark">YOLO实时目标检测系统</h1>
+            </div>
+            <div class="flex items-center space-x-4">
+                <div id="status-indicator" class="flex items-center text-sm">
+                    <span id="connection-status" class="inline-block w-2 h-2 rounded-full bg-warning mr-2"></span>
+                    <span id="status-text">连接中...</span>
+                </div>
+                <button id="fullscreen-btn" class="p-2 rounded-full hover:bg-gray-100 transition-all">
+                    <i class="fa fa-expand text-dark"></i>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- 主内容区 -->
+    <main class="flex-grow container mx-auto px-4 py-6">
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <!-- 视频区域 -->
+            <div class="lg:col-span-2 slide-in" style="animation-delay: 100ms;">
+                <div class="video-container w-full bg-dark">
+                    <!-- 视频流将通过JS渲染到这个canvas -->
+                    <canvas id="video-canvas" class="w-full h-auto"></canvas>
+                    
+                    <!-- 加载状态覆盖层 -->
+                    <div id="loading-overlay" class="video-overlay">
+                        <div class="text-center">
+                            <div class="loading-spinner mx-auto mb-4"></div>
+                            <p class="text-white text-lg">正在连接视频流...</p>
+                        </div>
+                    </div>
+                    
+                    <!-- 错误状态覆盖层 (默认隐藏) -->
+                    <div id="error-overlay" class="video-overlay hidden">
+                        <div class="text-center text-white p-4">
+                            <i class="fa fa-exclamation-triangle text-4xl mb-4 text-warning"></i>
+                            <p id="error-message" class="text-lg">连接失败，请重试</p>
+                            <button id="reconnect-btn" class="mt-4 bg-primary hover:bg-primary/90 text-white px-4 py-2 rounded-lg transition-all">
+                                重新连接
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- 视频信息栏 -->
+                <div class="mt-4 bg-white p-3 rounded-lg shadow flex flex-wrap justify-between items-center">
+                    <div class="flex items-center space-x-4 mb-2 sm:mb-0">
+                        <div class="flex items-center">
+                            <i class="fa fa-tachometer text-primary mr-2"></i>
+                            <span>帧率: <span id="fps-counter">0</span> FPS</span>
+                        </div>
+                        <div class="flex items-center">
+                            <i class="fa fa-clock-o text-primary mr-2"></i>
+                            <span>延迟: <span id="latency-counter">0</span> ms</span>
+                        </div>
+                        <div class="flex items-center">
+                            <i class="fa fa-picture-o text-primary mr-2"></i>
+                            <span>分辨率: <span id="resolution-info">加载中...</span></span>
+                        </div>
+                    </div>
+                    <div class="flex items-center">
+                        <span id="detection-count" class="bg-light px-3 py-1 rounded-full text-sm">
+                            检测到: 0 个目标
+                        </span>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- 控制面板 -->
+            <div class="lg:col-span-1 slide-in" style="animation-delay: 200ms;">
+                <div class="bg-white rounded-lg shadow-lg overflow-hidden h-full">
+                    <div class="bg-primary text-white p-4">
+                        <h2 class="text-lg font-semibold flex items-center">
+                            <i class="fa fa-sliders mr-2"></i>控制面板
+                        </h2>
+                    </div>
+                    
+                    <div class="p-5 space-y-6">
+                        <!-- 置信度设置 -->
+                        <div class="space-y-3">
+                            <div class="flex justify-between items-center">
+                                <label for="confidence-slider" class="font-medium text-dark">检测置信度</label>
+                                <span id="confidence-value" class="bg-primary/10 text-primary px-2 py-1 rounded text-sm">0.4</span>
+                            </div>
+                            <input 
+                                type="range" 
+                                id="confidence-slider" 
+                                min="0.1" 
+                                max="0.9" 
+                                step="0.05" 
+                                value="0.4"
+                                class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-primary"
+                            >
+                            <p class="text-xs text-gray-500">调整目标检测的敏感度，值越高检测越严格</p>
+                        </div>
+                        
+                        <hr class="border-gray-200">
+                        
+                        <!-- 系统状态 -->
+                        <div>
+                            <h3 class="font-medium text-dark mb-3 flex items-center">
+                                <i class="fa fa-info-circle mr-2 text-primary"></i>系统状态
+                            </h3>
+                            <div class="space-y-2 text-sm">
+                                <div class="flex justify-between">
+                                    <span class="text-gray-600">会话ID:</span>
+                                    <span id="session-id" class="font-mono bg-light px-2 py-1 rounded truncate max-w-[180px]"></span>
+                                </div>
+                                <div class="flex justify-between">
+                                    <span class="text-gray-600">连接时间:</span>
+                                    <span id="connection-time">-</span>
+                                </div>
+                                <div class="flex justify-between">
+                                    <span class="text-gray-600">模型名称:</span>
+                                    <span id="model-name">YOLO11n</span>
+                                </div>
+                                <div class="flex justify-between">
+                                    <span class="text-gray-600">处理耗时:</span>
+                                    <span id="processing-time">0 ms</span>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <hr class="border-gray-200">
+                        
+                        <!-- 日志区域 -->
+                        <div>
+                            <h3 class="font-medium text-dark mb-3 flex items-center">
+                                <i class="fa fa-history mr-2 text-primary"></i>事件日志
+                            </h3>
+                            <div id="event-log" class="bg-light rounded-lg p-3 h-40 overflow-y-auto text-sm space-y-1 text-gray-700 text-xs">
+                                <div class="fade-in">系统初始化中...</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- 页脚 -->
+    <footer class="bg-dark text-white py-4 mt-6">
+        <div class="container mx-auto px-4 text-center text-sm">
+            <p>© 2023 YOLO实时目标检测系统 | 使用FastAPI和WebSocket构建</p>
+        </div>
+    </footer>
+
+    <script>
+        // 全局变量
+        let ws;
+        let canvas, ctx;
+        let sessionId = "{{ session_id }}";
+        let lastFrameTime = 0;
+        let fps = 0;
+        let frameCount = 0;
+        let lastSecond = 0;
+        let connectionStartTime = null;
+        let detectionCount = 0;
+        let processingTime = 0;
+        // 新增：防抖计时器
+        let confidenceDebounceTimer = null;
+        
+        // DOM元素
+        const elements = {
+            canvas: document.getElementById('video-canvas'),
+            loadingOverlay: document.getElementById('loading-overlay'),
+            errorOverlay: document.getElementById('error-overlay'),
+            errorMessage: document.getElementById('error-message'),
+            reconnectBtn: document.getElementById('reconnect-btn'),
+            confidenceSlider: document.getElementById('confidence-slider'),
+            confidenceValue: document.getElementById('confidence-value'),
+            fpsCounter: document.getElementById('fps-counter'),
+            latencyCounter: document.getElementById('latency-counter'),
+            resolutionInfo: document.getElementById('resolution-info'),
+            detectionCount: document.getElementById('detection-count'),
+            sessionId: document.getElementById('session-id'),
+            connectionTime: document.getElementById('connection-time'),
+            processingTime: document.getElementById('processing-time'),
+            eventLog: document.getElementById('event-log'),
+            connectionStatus: document.getElementById('connection-status'),
+            statusText: document.getElementById('status-text'),
+            fullscreenBtn: document.getElementById('fullscreen-btn')
+        };
+        
+        // 初始化
+        function init() {
+            // 设置会话ID显示
+            elements.sessionId.textContent = sessionId;
+            
+            // 初始化Canvas
+            canvas = elements.canvas;
+            ctx = canvas.getContext('2d');
+            
+            // 连接WebSocket
+            connectWebSocket();
+            
+            // 事件监听 - 修改：使用change事件并添加input事件用于实时显示
+            elements.confidenceSlider.addEventListener('input', handleConfidenceDisplay);
+            elements.confidenceSlider.addEventListener('change', handleConfidenceChange);
+            elements.reconnectBtn.addEventListener('click', reconnect);
+            elements.fullscreenBtn.addEventListener('click', toggleFullscreen);
+            
+            // 启动FPS计数器
+            setInterval(updateFPS, 1000);
+        }
+        
+        // 处理置信度显示更新（仅更新UI，不发送请求）
+        function handleConfidenceDisplay() {
+            const value = parseFloat(elements.confidenceSlider.value);
+            elements.confidenceValue.textContent = value.toFixed(2);
+        }
+        
+        // 处理置信度实际变更（发送请求到服务器）
+        function handleConfidenceChange() {
+            const value = parseFloat(elements.confidenceSlider.value);
+            
+            // 添加视觉反馈，显示正在更新
+            elements.confidenceValue.classList.add('confidence-updating');
+            
+            // 清除之前的计时器
+            if (confidenceDebounceTimer) {
+                clearTimeout(confidenceDebounceTimer);
+            }
+            
+            // 设置防抖计时器，500ms内没有新的变化才发送请求
+            confidenceDebounceTimer = setTimeout(() => {
+                // 发送到服务器
+                if (ws && ws.readyState === WebSocket.OPEN) {
+                    ws.send(JSON.stringify({
+                        type: 'set_confidence',
+                        value: value
+                    }));
+                    logEvent(`设置置信度为 ${value.toFixed(2)}`);
+                }
+                
+                // 移除更新状态的视觉反馈
+                elements.confidenceValue.classList.remove('confidence-updating');
+            }, 500);
+        }
+        
+        // 连接WebSocket
+        function connectWebSocket() {
+            // 隐藏错误覆盖层，显示加载覆盖层
+            elements.errorOverlay.classList.add('hidden');
+            elements.loadingOverlay.classList.remove('hidden');
+            
+            // 更新状态
+            updateStatus('connecting', '连接中...');
+            
+            // 构建WebSocket URL
+            const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+            const wsUrl = `${protocol}//${window.location.host}/ws/${sessionId}`;
+            
+            // 创建WebSocket连接
+            ws = new WebSocket(wsUrl);
+            
+            // 连接打开时
+            ws.onopen = function() {
+                logEvent('已连接到服务器');
+                elements.loadingOverlay.classList.add('hidden');
+                updateStatus('connected', '已连接');
+                connectionStartTime = new Date();
+                updateConnectionTime();
+            };
+            
+            // 收到消息时
+            ws.onmessage = function(event) {
+                // 处理二进制帧数据(视频帧)
+                if (event.data instanceof Blob) {
+                    handleFrameData(event.data);
+                } 
+                // 处理文本消息(控制信息)
+                else {
+                    try {
+                        const message = JSON.parse(event.data);
+                        handleControlMessage(message);
+                    } catch (e) {
+                        logEvent(`收到无效消息: ${event.data}`, 'error');
+                    }
+                }
+            };
+            
+            // 连接关闭时
+            ws.onclose = function(event) {
+                logEvent(`连接已关闭 (代码: ${event.code})`, 'warning');
+                elements.loadingOverlay.classList.add('hidden');
+                
+                if (event.code !== 1000) { // 1000是正常关闭代码
+                    elements.errorOverlay.classList.remove('hidden');
+                    elements.errorMessage.textContent = `连接已断开: ${event.reason || '未知原因'}`;
+                    updateStatus('error', '已断开');
+                }
+            };
+            
+            // 连接错误时
+            ws.onerror = function(error) {
+                logEvent(`WebSocket错误: ${error}`, 'error');
+                elements.loadingOverlay.classList.add('hidden');
+                elements.errorOverlay.classList.remove('hidden');
+                elements.errorMessage.textContent = '连接发生错误，请重试';
+                updateStatus('error', '错误');
+            };
+        }
+        
+        // 处理视频帧数据
+        function handleFrameData(blob) {
+            const img = new Image();
+            const startTime = performance.now();
+            
+            img.onload = function() {
+                // 计算延迟
+                const latency = Math.round(performance.now() - startTime);
+                elements.latencyCounter.textContent = latency;
+                
+                // 更新Canvas尺寸
+                if (canvas.width !== img.width || canvas.height !== img.height) {
+                    canvas.width = img.width;
+                    canvas.height = img.height;
+                    elements.resolutionInfo.textContent = `${img.width}x${img.height}`;
+                }
+                
+                // 绘制图像
+                ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+                
+                // 更新帧率计数
+                frameCount++;
+                
+                // 记录最后一帧时间
+                lastFrameTime = Date.now();
+            };
+            
+            img.src = URL.createObjectURL(blob);
+        }
+        
+        // 处理控制消息
+        function handleControlMessage(message) {
+            switch (message.type) {
+                case 'connected':
+                    logEvent(message.message);
+                    if (message.resolution) {
+                        elements.resolutionInfo.textContent = message.resolution;
+                    }
+                    break;
+                case 'warning':
+                    logEvent(message.message, 'warning');
+                    break;
+                case 'error':
+                    logEvent(message.message, 'error');
+                    break;
+                case 'confidence_updated':
+                    logEvent(message.message);
+                    break;
+                case 'ack':
+                    // 确认消息，无需特别处理
+                    break;
+                default:
+                    logEvent(`收到消息: ${JSON.stringify(message)}`);
+            }
+        }
+        
+        // 重新连接
+        function reconnect() {
+            if (ws) {
+                ws.close();
+            }
+            connectWebSocket();
+        }
+        
+        // 更新FPS计数
+        function updateFPS() {
+            const now = Date.now();
+            const elapsed = (now - lastSecond) / 1000;
+            
+            if (elapsed > 0) {
+                fps = Math.round(frameCount / elapsed);
+                elements.fpsCounter.textContent = fps;
+            }
+            
+            frameCount = 0;
+            lastSecond = now;
+        }
+        
+        // 更新连接时间
+        function updateConnectionTime() {
+            if (!connectionStartTime) return;
+            
+            const now = new Date();
+            const diffMs = now - connectionStartTime;
+            const seconds = Math.floor(diffMs / 1000) % 60;
+            const minutes = Math.floor(diffMs / (1000 * 60)) % 60;
+            const hours = Math.floor(diffMs / (1000 * 60 * 60));
+            
+            let timeStr = '';
+            if (hours > 0) timeStr += `${hours}h `;
+            if (minutes > 0 || hours > 0) timeStr += `${minutes}m `;
+            timeStr += `${seconds}s`;
+            
+            elements.connectionTime.textContent = timeStr;
+            
+            // 继续更新
+            requestAnimationFrame(updateConnectionTime);
+        }
+        
+        // 记录事件日志
+        function logEvent(message, type = 'info') {
+            const now = new Date();
+            const timeStr = now.toLocaleTimeString();
+            
+            const logEntry = document.createElement('div');
+            logEntry.className = 'fade-in';
+            
+            let icon = '';
+            switch (type) {
+                case 'warning':
+                    icon = '<i class="fa fa-exclamation-circle text-warning mr-1"></i>';
+                    break;
+                case 'error':
+                    icon = '<i class="fa fa-times-circle text-danger mr-1"></i>';
+                    break;
+                default:
+                    icon = '<i class="fa fa-info-circle text-primary mr-1"></i>';
+            }
+            
+            logEntry.innerHTML = `[${timeStr}] ${icon}${message}`;
+            
+            elements.eventLog.appendChild(logEntry);
+            elements.eventLog.scrollTop = elements.eventLog.scrollHeight;
+            
+            // 限制日志条目数量
+            if (elements.eventLog.children.length > 50) {
+                elements.eventLog.removeChild(elements.eventLog.firstChild);
+            }
+        }
+        
+        // 更新连接状态
+        function updateStatus(status, text) {
+            // 移除所有状态类
+            elements.connectionStatus.classList.remove('bg-warning', 'bg-success', 'bg-danger');
+            
+            // 添加新状态类
+            switch (status) {
+                case 'connecting':
+                    elements.connectionStatus.classList.add('bg-warning');
+                    break;
+                case 'connected':
+                    elements.connectionStatus.classList.add('bg-success');
+                    break;
+                case 'error':
+                    elements.connectionStatus.classList.add('bg-danger');
+                    break;
+            }
+            
+            elements.statusText.textContent = text;
+        }
+        
+        // 切换全屏
+        function toggleFullscreen() {
+            if (!document.fullscreenElement) {
+                if (canvas.requestFullscreen) {
+                    canvas.requestFullscreen();
+                } else if (canvas.webkitRequestFullscreen) { /* Safari */
+                    canvas.webkitRequestFullscreen();
+                } else if (canvas.msRequestFullscreen) { /* IE11 */
+                    canvas.msRequestFullscreen();
+                }
+                elements.fullscreenBtn.innerHTML = '<i class="fa fa-compress text-dark"></i>';
+                logEvent('已进入全屏模式');
+            } else {
+                if (document.exitFullscreen) {
+                    document.exitFullscreen();
+                } else if (document.webkitExitFullscreen) { /* Safari */
+                    document.webkitExitFullscreen();
+                } else if (document.msExitFullscreen) { /* IE11 */
+                    document.msExitFullscreen();
+                }
+                elements.fullscreenBtn.innerHTML = '<i class="fa fa-expand text-dark"></i>';
+                logEvent('已退出全屏模式');
+            }
+        }
+        
+        // 页面加载完成后初始化
+        window.addEventListener('load', init);
+        
+        // 窗口关闭时关闭连接
+        window.addEventListener('beforeunload', function() {
+            if (ws) {
+                ws.close(1000, '页面关闭');
+            }
+        });
+    </script>
+</body>
+</html>
